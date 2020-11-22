@@ -11,13 +11,12 @@ namespace BoyController
 
         [Header ("Basic Setting")]
 
-        [SerializeField][Range (0.1f, 20f)] float runSpeed = 10.0f;
+        [SerializeField][Range (0.1f, 10f)] float runSpeed = 5.0f;
         [SerializeField][Range (0.1f, 10f)] float jumpVelocity = 5.0f;
 
         //private property
-        float speed = 0;
+
         bool isJumping = false;
-        float angulerVelocity = 50.0f;
         Vector2 horizontalVelocity = Vector2.zero;
 
         Rigidbody rb;
@@ -29,6 +28,8 @@ namespace BoyController
             rb = GetComponent<Rigidbody> ();
             capsuleCollider = GetComponent<CapsuleCollider> ();
             animator = GetComponent<Animator> ();
+
+            InitPhysicMaterial ();
         }
 
         void Update ()
@@ -36,7 +37,7 @@ namespace BoyController
             horizontalVelocity.x = Input.GetAxis ("Horizontal");
             horizontalVelocity.y = Input.GetAxis ("Vertical");
 
-            if (Input.GetKeyDown (KeyCode.Space))
+            if (Input.GetButtonDown ("Jump"))
             {
                 Jump ();
             }
@@ -46,47 +47,33 @@ namespace BoyController
         {
             JumpUpdate ();
 
-            UpdateDirection ();
             UpdateLocomotion ();
             UpdateAnimation ();
         }
 
-        //移動
-        private void UpdateLocomotion ()
-        {
-            speed = Mathf.Abs (horizontalVelocity.x) + Mathf.Abs (horizontalVelocity.y);
-            speed = Mathf.Clamp01 (speed);
-
-            if (isJumping)
-            {
-                speed *= 0.4f;
-            }
-
-            if (speed > 0f)
-            {
-                Vector3 velocity = transform.forward * runSpeed * speed;
-                velocity.y = rb.velocity.y;
-                rb.velocity = velocity;
-            }
-        }
-
         //回転
-        private void UpdateDirection ()
+        private void UpdateLocomotion()
         {
             if (!Camera.main.transform) return;
 
             var forward = Camera.main.transform.forward;
             var right = Camera.main.transform.right;
             forward.y = 0;
-            Vector3 targetDirection = horizontalVelocity.x * right + horizontalVelocity.y * forward;
 
-            if (horizontalVelocity != Vector2.zero && targetDirection.magnitude > 0.1f)
+            Vector3 targetDirection = Vector3.zero;
+            targetDirection += right * horizontalVelocity.x + forward * horizontalVelocity.y;
+
+            Vector3 velocity = targetDirection * runSpeed;
+            velocity.y = rb.velocity.y;
+            rb.velocity = velocity;
+
+            if (targetDirection.magnitude > 0.1f)
             {
                 var lookDirection = targetDirection.normalized;
-                var targetRotation = Quaternion.LookRotation (lookDirection, transform.up);
+                var targetRotation = Quaternion.LookRotation(lookDirection, transform.up);
                 var euler = transform.eulerAngles;
                 euler.y = targetRotation.eulerAngles.y;
-                transform.rotation = Quaternion.Lerp (transform.rotation, Quaternion.Euler (euler), angulerVelocity * Time.fixedDeltaTime);
+                transform.rotation = Quaternion.Lerp(transform.rotation, Quaternion.Euler(euler), 20 * Time.fixedDeltaTime);
             }
         }
 
@@ -94,6 +81,9 @@ namespace BoyController
         private void UpdateAnimation ()
         {
             if (!animator.enabled) return;
+
+            float speed = Mathf.Abs(horizontalVelocity.x) + Mathf.Abs(horizontalVelocity.y);
+            speed = Mathf.Clamp01(speed);
 
             animator.SetBool ("IsGrounded", IsGround ());
             animator.SetFloat ("GroundDistance", GetGroundDistance ());
@@ -163,5 +153,21 @@ namespace BoyController
         }
 
         #endregion
+
+        #region InitPhysicMaterial
+
+        //キャラクタ用のPhysicMaterialを作成してアタッチ
+        private void InitPhysicMaterial ()
+        {
+            PhysicMaterial noFrictionPhysics = new PhysicMaterial ();
+            noFrictionPhysics.name = "noFrictionPhysics";
+            noFrictionPhysics.staticFriction = 0;
+            noFrictionPhysics.dynamicFriction = 0;
+            noFrictionPhysics.frictionCombine = PhysicMaterialCombine.Minimum;
+            capsuleCollider.material = noFrictionPhysics;
+        }
+
+        #endregion
+
     }
 }
